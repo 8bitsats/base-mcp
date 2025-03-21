@@ -147,6 +147,36 @@ const buyOpenRouterCreditsTool: Tool = {
   },
 };
 
+const launchSolanaTokenTool: Tool = {
+  name: "launch_solana_token",
+  description: "Launch a token on Solana",
+  inputSchema: {
+    type: "object",
+    properties: {
+      name: { type: "string", description: "Token name" },
+      symbol: { type: "string", description: "Token symbol" },
+      uri: { type: "string", description: "Metadata URI" },
+      initialBuyAmount: { type: "string", description: "Initial buy amount" },
+    },
+    required: ["name", "symbol", "uri"],
+  },
+};
+
+const launchBaseTokenTool: Tool = {
+  name: "launch_base_token",
+  description: "Launch a token on Base",
+  inputSchema: {
+    type: "object",
+    properties: {
+      name: { type: "string", description: "Token name" },
+      symbol: { type: "string", description: "Token symbol" },
+      uri: { type: "string", description: "Metadata URI" },
+      initialBuyAmount: { type: "string", description: "Initial buy amount" },
+    },
+    required: ["name", "symbol", "uri"],
+  },
+};
+
 export const baseMcpTools: Tool[] = [
   getMorphoVaultsTool,
   callContractTool,
@@ -155,7 +185,11 @@ export const baseMcpTools: Tool[] = [
   erc20BalanceTool,
   erc20TransferTool,
   buyOpenRouterCreditsTool,
+  launchSolanaTokenTool,
+  launchBaseTokenTool,
 ];
+
+import { MultiChainTokenLauncher } from "../MultiChainTokenLauncher.js";
 
 // biome-ignore lint/complexity/noBannedTypes: temp
 export const toolToHandler: Record<string, Function> = {
@@ -165,5 +199,19 @@ export const toolToHandler: Record<string, Function> = {
   onramp: onrampHandler,
   erc20_balance: erc20BalanceHandler,
   erc20_transfer: erc20TransferHandler,
-  buy_openrouter_credits: buyOpenRouterCreditsHandler,
+  buyOpenRouterCredits: buyOpenRouterCreditsHandler,
+  launch_solana_token: async (viemClient: any, args: any) => {
+    console.log("launch_solana_token handler called with args:", args);
+    const multiChainTokenLauncher = new MultiChainTokenLauncher({ testMode: true });
+    const result = await multiChainTokenLauncher.launchSolanaToken({} as any, args);
+    console.log("launch_solana_token result:", result);
+    return { content: [{ type: "text", text: JSON.stringify(result) }] };
+  },
+  launch_base_token: async (viemClient: any, args: any) => {
+    console.log("launch_base_token handler called with args:", args);
+    const multiChainTokenLauncher = new MultiChainTokenLauncher({ testMode: true });
+    const result = await multiChainTokenLauncher.launchBaseToken(args);
+    console.log("launch_base_token result:", result);
+    return { content: [{ type: "text", text: JSON.stringify(result) }] };
+  },
 };

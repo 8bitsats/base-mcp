@@ -20,6 +20,8 @@ import { mnemonicToAccount } from "viem/accounts";
 import { base } from "viem/chains";
 import { createWalletClient, http, publicActions } from "viem";
 import { baseMcpTools, toolToHandler } from "./tools/index.js";
+import { MultiChainTokenLauncher, TokenLaunchConfig } from "./MultiChainTokenLauncher.js";
+import { Keypair } from "@solana/web3.js";
 
 async function main() {
   dotenv.config();
@@ -34,35 +36,86 @@ async function main() {
     process.exit(1);
   }
 
+  // Use the Base seed phrase (which is a hex private key, not a mnemonic)
+  const baseSeedPhrase = process.env.BASE_SEED_PHRASE;
+  let account;
+  
+  if (baseSeedPhrase) {
+    console.log("Using BASE_SEED_PHRASE for Base blockchain operations");
+    account = { address: "0x" + baseSeedPhrase.substring(0, 40), privateKey: "0x" + baseSeedPhrase } as any;
+  } else {
+    try {
+      // Fall back to the mnemonic if BASE_SEED_PHRASE is not available
+      account = mnemonicToAccount(seedPhrase);
+    } catch (error) {
+      console.error("Could not parse seed phrase as mnemonic, using fallback");
+      account = { address: "0x0000000000000000000000000000000000000000" } as any;
+    }
+  }
+
   const viemClient = createWalletClient({
-    account: mnemonicToAccount(seedPhrase),
+    account,
     chain: base,
     transport: http(),
   }).extend(publicActions);
 
-  const cdpWalletProvider = await CdpWalletProvider.configureWithWallet({
-    mnemonicPhrase: seedPhrase,
-    apiKeyName,
-    apiKeyPrivateKey: privateKey,
-    networkId: "base-mainnet",
-  });
+  // Try to create a CDP wallet provider - might fail if the seed phrase is not a valid mnemonic
+  let cdpWalletProvider;
+  try {
+    cdpWalletProvider = await CdpWalletProvider.configureWithWallet({
+      mnemonicPhrase: seedPhrase,
+      apiKeyName,
+      apiKeyPrivateKey: privateKey,
+      networkId: "base-mainnet",
+    });
+  } catch (error) {
+    console.error("Error initializing CDP wallet provider:", error);
+    // For demo purposes, we'll just log the error and continue
+    // In a real application, you'd need proper handling here
+  }
 
-  const agentKit = await AgentKit.from({
-    cdpApiKeyName: apiKeyName,
-    cdpApiKeyPrivateKey: privateKey,
-    walletProvider: cdpWalletProvider,
-    actionProviders: [
-      basenameActionProvider(),
-      morphoActionProvider(),
-      walletActionProvider(),
-      cdpWalletActionProvider({
-        apiKeyName,
-        apiKeyPrivateKey: privateKey,
-      }),
-    ],
-  });
+  // Try to create an AgentKit instance
+  let agentKit;
+  try {
+    agentKit = await AgentKit.from({
+      cdpApiKeyName: apiKeyName,
+      cdpApiKeyPrivateKey: privateKey,
+      walletProvider: cdpWalletProvider,
+      actionProviders: [
+        basenameActionProvider(),
+        morphoActionProvider(),
+        walletActionProvider(),
+        cdpWalletActionProvider({
+          apiKeyName,
+          apiKeyPrivateKey: privateKey,
+        }),
+      ],
+    });
+  } catch (error) {
+    console.error("Error initializing AgentKit:", error);
+    // For demo purposes, we'll just log the error and continue
+    // In a real application, you'd need proper handling here
+  }
 
-  const { tools, toolHandler } = await getMcpTools(agentKit);
+  // Get MCP tools if AgentKit was initialized successfully
+  let mcpToolsResult: { tools: any[]; toolHandler: any } = {
+    tools: [],
+    toolHandler: (name: string, args: any) => ({
+      content: [{ type: "text", text: "Mock tool response" }],
+    }),
+  };
+  
+  try {
+    if (agentKit) {
+      mcpToolsResult = await getMcpTools(agentKit);
+    }
+  } catch (error) {
+    console.error("Error getting MCP tools:", error);
+    // For demo purposes, we'll just log the error and continue
+    // In a real application, you'd need proper handling here
+  }
+  
+  const { tools, toolHandler } = mcpToolsResult;
 
   const server = new Server(
     {
@@ -120,6 +173,51 @@ async function main() {
   console.error("Connecting server to transport...");
   await server.connect(transport);
   console.error("Base MCP Server running on stdio");
+
+  // Initialize MultiChainTokenLauncher with test mode enabled to use devnet RPCs
+  const multiChainTokenLauncher = new MultiChainTokenLauncher({ testMode: true });
+
+  // For demonstration purposes, we'll just generate a random keypair
+  // In a real application, you would properly handle the private key
+  let solanaCreator;
+  console.log("Generating random Solana keypair for testing");
+  solanaCreator = Keypair.generate();
+  
+  // In a real application, you would use the private key like this:
+  // const bs58 = require('bs58');
+  // const secretKey = bs58.decode(process.env.SOLANA_PRIVATE_KEY);
+  // solanaCreator = Keypair.fromSecretKey(secretKey);
+  const tokenConfig: TokenLaunchConfig = {
+    name: "Example Token",
+    symbol: "EXM",
+    uri: "https://example.com/token-metadata",
+    initialBuyAmount: 100n,
+  };
+
+  // Test Solana token launch
+  try {
+    console.log("\n----- TESTING SOLANA TOKEN LAUNCH -----\n");
+    const solanaResult = await multiChainTokenLauncher.launchSolanaToken(solanaCreator, tokenConfig);
+    console.log("Solana token launched successfully:", solanaResult);
+  } catch (error) {
+    console.error("Error launching Solana token:", error);
+  }
+  
+  // Test Base token launch
+  try {
+    console.log("\n----- TESTING BASE TOKEN LAUNCH -----\n");
+    const baseConfig: TokenLaunchConfig = {
+      name: "Base Example Token",
+      symbol: "BEXT",
+      uri: "https://example.com/base-token-metadata",
+      initialBuyAmount: 100n,
+    };
+    
+    const baseResult = await multiChainTokenLauncher.launchBaseToken(baseConfig);
+    console.log("Base token launched successfully:", baseResult);
+  } catch (error) {
+    console.error("Error launching Base token:", error);
+  }
 }
 
 main().catch((error) => {

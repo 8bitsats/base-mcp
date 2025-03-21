@@ -4,14 +4,20 @@
       "module": "NodeNext",
       "moduleResolution": "NodeNext",
       "outDir": "./build",
-      "rootDir": "./src",
+      "rootDir": ".",
       "strict": true,
       "esModuleInterop": true,
       "skipLibCheck": true,
       "forceConsistentCasingInFileNames": true,
       "experimentalDecorators": true,
       "emitDecoratorMetadata": true,
+      "resolveJsonModule": true,
+      "rootDirs": ["src", "pumpdotfun-sdk-main/src"],
+      "baseUrl": ".",
+      "paths": {
+        "*": ["*", "src/*", "pumpdotfun-sdk-main/src/*"]
+      }
     },
-    "include": ["src/**/*"],
+    "include": ["src/**/*", "pumpdotfun-sdk-main/src/**/*"],
     "exclude": ["node_modules"]
   }
